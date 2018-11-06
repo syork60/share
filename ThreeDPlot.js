@@ -70,7 +70,7 @@ var ThreeDPlot=function(maxX,maxY,maxZ,divSize,xPlaneName,zPlaneName) {
 
 	this.applyOrbitControls=function(camera)
 	{
-		var oc=new THREE.OrbitControls(camera); oc.target=new THREE.Vector3(-xMax/2,yMax/2,0);
+		var oc=new THREE.OrbitControls(camera); oc.target=new THREE.Vector3(-this.maxX/2,this.maxY/2,0);
 		oc.screenSpacePanning=true; oc.enableDamping=true; oc.dampingFactor=0.08;
 		oc.rotateSpeed=0.1; oc.panSpeed=0.1; return oc;
 	}
@@ -78,6 +78,6 @@ var ThreeDPlot=function(maxX,maxY,maxZ,divSize,xPlaneName,zPlaneName) {
 	this.getDefaultCamera=function()
 	{
 		var rc=new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000000);
-		rc.position.set(-xMax*1.4, yMax*1.3, xMax*2); return rc;
+		rc.position.set(-this.maxX*1.4, this.maxY*1.3, this.maxX*2); return rc;
 	}
 };
