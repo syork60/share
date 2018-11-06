@@ -46,7 +46,7 @@ var ThreeDPlot=function(maxX,maxY,maxZ,divSize,xPlaneName,zPlaneName) {
 
 	this.drawScales=function(scene,textColor) {
 		var self=this; var loader=new THREE.FontLoader();
-		var url='https://threejs.org//examples/fonts/gentilis_regular.typeface.json';
+		var url='https://syork60.github.io/share/gentilis_regular.typeface.json';
 		loader.load(url, function (font) {
 			var matDark=new THREE.LineBasicMaterial({ color: textColor, side: THREE.DoubleSide });
 			var getTG=s=>new THREE.TextGeometry(s,{ font: font, size: self.scaleFactor*2.8, height: 1, curveSegments: 12, bevelEnabled: false});
