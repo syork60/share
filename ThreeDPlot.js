@@ -1,7 +1,6 @@
 var ThreeDPlot=function(maxX,maxY,maxZ,divSize,xPlaneName,zPlaneName) {
-	this.maxX=maxX; this.maxY=maxY; this.maxZ=maxZ; this.divSize=divSize;
-	this.xPlaneName=xPlaneName; this.zPlaneName=zPlaneName;
-  this.scaleFactor=Math.max(Math.max(maxX,maxY),maxZ)/100;
+	this.maxX=maxX; this.maxY=maxY; this.maxZ=maxZ; this.divSize=divSize; this.xPlaneName=xPlaneName; this.zPlaneName=zPlaneName;
+	this.scaleFactor=Math.max(Math.max(maxX,maxY),maxZ)/100;
 	this.makeWall=function(xVal,yVal,divSize) {
 		var vtx=[];
 		for(var i=divSize;i<=xVal+1;i+=divSize)
@@ -38,10 +37,15 @@ var ThreeDPlot=function(maxX,maxY,maxZ,divSize,xPlaneName,zPlaneName) {
 
 	this.applyDefaultLights=function(scene) {
 		scene.add(new THREE.AmbientLight(0xffffff,2.5));
-		var pl=new THREE.PointLight(0xffffff,0.4,0,0); pl.position.set(1000, 200, 1000); scene.add(pl);
-		pl=new THREE.PointLight(0xffffff,0.4,0,0); pl.position.set(-1000, -200, 1000); scene.add(pl);
-		pl=new THREE.PointLight(0xffffff,0.4,0,0); pl.position.set(0, 0, -1000); scene.add(pl);
-		return scene;
+		var pla=(x,y,z)=>{ var pl=new THREE.PointLight(0xffffff,0.6,0,0); pl.position.set(x,y,z); scene.add(pl); };
+			//8 lights - all 8 corners of the cube.
+		pla(-this.maxX-200,this.maxY,this.maxZ+200); pla(-this.maxX-200,0,this.maxZ+200);
+		pla(200,this.maxY,this.maxZ+200); pla(200,0,this.maxZ+200);
+		pla(-this.maxX-200,this.maxY,-200); pla(-this.maxX-200,0,-200);
+		pla(200,this.maxY,-200); pla(200,0,-200);
+			//6 lights.
+		//var Y=this.maxY/2; pla(-this.maxX-200,Y,this.maxZ+200); pla(200,Y,this.maxZ+200); pla(-this.maxX-200,Y,-200); pla(200,Y,-200);
+		//pla(-this.maxX/2,this.maxY+200,this.maxZ/2); pla(-this.maxX/2,-200,this.maxZ/2);
 	}
 
 	this.drawScales=function(scene,textColor) {
@@ -50,7 +54,7 @@ var ThreeDPlot=function(maxX,maxY,maxZ,divSize,xPlaneName,zPlaneName) {
 		loader.load(url, function (font) {
 			var matDark=new THREE.LineBasicMaterial({ color: textColor, side: THREE.DoubleSide });
 			var getTG=s=>new THREE.TextGeometry(s,{ font: font, size: self.scaleFactor*2.8, height: 1, curveSegments: 12, bevelEnabled: false});
-      var getTGWidth=g=>{ g.computeBoundingBox(); return g.boundingBox.max.x; }
+			var getTGWidth=g=>{ g.computeBoundingBox(); return g.boundingBox.max.x; }
 			var geometry=getTG(self.zPlaneName),gWidth=getTGWidth(geometry);
 			geometry.rotateY(-Math.PI/2); geometry.translate(0,self.maxY+self.scaleFactor/2,(maxZ-gWidth)/2);
 			scene.add(new THREE.Mesh(geometry, matDark));
