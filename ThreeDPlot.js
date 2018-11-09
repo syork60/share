@@ -84,9 +84,9 @@ var ThreeDPlot=function(xExtent,yExtent,zExtent,divSize,xPlaneName,zPlaneName) {
 		});
 	}
 
-	this.applyOrbitControls=function(camera)
+	this.applyOrbitControls=function(camera,domElement)
 	{
-		var oc=new THREE.OrbitControls(camera); oc.target=new THREE.Vector3(-this.maxX/2,this.maxY/2,0);
+		var oc=new THREE.OrbitControls(camera,domElement); oc.target=new THREE.Vector3(-this.maxX/2,this.maxY/2,0);
 		oc.screenSpacePanning=true; oc.enableDamping=true; oc.dampingFactor=0.08;
 		oc.rotateSpeed=0.1; oc.panSpeed=0.1; return oc;
 	}
