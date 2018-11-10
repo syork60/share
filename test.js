@@ -1,36 +1,43 @@
+//Finish - handle quadrants properly
+//Finish - Check for mem leaks.
+//Finish - first time camera position.
+//Finish - plane name position on short planes. (4).
 
+class MyTubes
+{
+	constructor(data,parameters) {
+		this.setValues=function(values) {
+			if (values===undefined) return;
+			for (var key in values) {
+				var newValue=values[key];
+				if (newValue===undefined ) { console.warn("'"+key+"' parameter is undefined." ); continue; }
+				var currentValue=this[key];
+				if (currentValue===undefined) { console.warn("'" + key + "' is not a property of MyTubes." ); continue; }
+				this[key]=newValue;
+			}
+		};
 
-var MyTubes=function(data,parameters) {
-	this.setValues=function(values) {
-		if (values===undefined) return;
-		for (var key in values) {
-			var newValue=values[key];
-			if (newValue===undefined ) { console.warn("'"+key+"' parameter is undefined." ); continue; }
-			var currentValue=this[key];
-			if (currentValue===undefined) { console.warn("'" + key + "' is not a property of MyTubes." ); continue; }
-			this[key]=newValue;
-		}
-	};
+		this.data=data; this.preferredDivisions=8; this.setValues(parameters);
+		this.rus100=v=>Math.round(v/100)*100;
+		this.ru100=ext=> { return [this.rus100(ext[0]),0-this.rus100(0-ext[1])]; };
+		this.xExtent=this.ru100(d3.extent(data,d=>Math.abs(+d.East)));
+		this.yExtent=this.ru100(d3.extent(data,d=>Math.abs(+d.TVD)));
+		this.zExtent=this.ru100(d3.extent(data,d=>Math.abs(+d.North)));
+		var er=ext=>ext[1]-ext[0];
+		var lc=Math.max(Math.max(er(this.xExtent),er(this.yExtent)),er(this.zExtent))/this.preferredDivisions;
+		this.divUnits=this.rus100(lc);
+		var fixExt=ext=>{
+		if(ext[0]>=0) ext[0]=-100; while((ext[0]%this.divUnits)<0) ext[0]-=100; while((ext[1]%this.divUnits)>0) ext[1]+=100; return ext; };
+		this.xExtent=fixExt(this.xExtent); this.yExtent=fixExt(this.yExtent); this.zExtent=fixExt(this.zExtent); this.yExtent[0]=0;
+	}
 
-	this.data=data; this.preferredDivisions=8; this.setValues(parameters);
-	this.rus100=v=>Math.round(v/100)*100;
-	this.ru100=ext=> { return [this.rus100(ext[0]),0-this.rus100(0-ext[1])]; };
-	this.xExtent=this.ru100(d3.extent(data,d=>Math.abs(+d.East)));
-	this.yExtent=this.ru100(d3.extent(data,d=>Math.abs(+d.TVD)));
-	this.zExtent=this.ru100(d3.extent(data,d=>Math.abs(+d.North)));
-	var er=ext=>ext[1]-ext[0];
-	var lc=Math.max(Math.max(er(this.xExtent),er(this.yExtent)),er(this.zExtent))/this.preferredDivisions;
-	this.divUnits=this.rus100(lc);
-	var fixExt=ext=>{
-	if(ext[0]>=0) ext[0]=-100; while((ext[0]%this.divUnits)<0) ext[0]-=100; while((ext[1]%this.divUnits)>0) ext[1]+=100; return ext; };
-	this.xExtent=fixExt(this.xExtent); this.yExtent=fixExt(this.yExtent); this.zExtent=fixExt(this.zExtent); this.yExtent[0]=0;
 		//Never got the Line2 working here.
-	this.drawShadow=function(scene,path,m4,shadowColor) {	//Currently, this is just the X-wall shadow.
-		geometry=new THREE.Geometry(); geometry.setFromPoints(path.getPoints(data.length)); geometry.applyMatrix(m4);
+	drawShadow(scene,path,m4,shadowColor) {	//Currently, this is just the X-wall shadow.
+		var geometry=new THREE.Geometry(); geometry.setFromPoints(path.getPoints(this.data.length)); geometry.applyMatrix(m4);
 		scene.add(new THREE.Line(geometry,new THREE.LineBasicMaterial({ color: shadowColor })));
 	}
 
-	this.drawTube=function(scene,scaleFactor,tubeColors,shadowColor) {
+	drawTube(scene,scaleFactor,tubeColors,shadowColor) {
 		var cv=[],yMax=this.yExtent[1]; $.each(this.data,(i,v)=>cv.push(new THREE.Vector3(+v.East,yMax-v.TVD,-v.North)));
 		var path=new THREE.CatmullRomCurve3(cv); cv=[];
 		this.drawShadow(scene,path,new THREE.Matrix4().set(0,0,0,-this.zExtent[0], 0,1,0,0, 0,0,1,0, 0,0,0,1),shadowColor);
@@ -43,7 +50,8 @@ var MyTubes=function(data,parameters) {
 			var geometry=new THREE.TubeBufferGeometry(curve,points.length,dia*scaleFactor,32,false);
 			var options=(style&1!=0)?{color: tubeColors[+color],roughness:0.5,metalness:0.8,opacity:0.1,transparent:true}:
 				{color: tubeColors[+color],roughness:0.5,metalness:0.8};
-			material=new THREE.MeshStandardMaterial(options); scene.add(new THREE.Mesh(geometry, material));
+			var material=new THREE.MeshStandardMaterial(options);
+			var mesh=new THREE.Mesh(geometry,material); mesh.name="tube"; scene.add(mesh);
 			var genCap=(p,pl)=>
 			{
 				var cg=new THREE.CircleGeometry(dia*scaleFactor,32);
@@ -53,23 +61,37 @@ var MyTubes=function(data,parameters) {
 			scene.add(new THREE.Mesh(genCap(points[0],points[1]),material));
 			var pe=points.length-1; scene.add(new THREE.Mesh(genCap(points[pe],points[pe-1]),material));
 		};
-		var prev=null,points=path.getPoints(data.length),p2=[]; //If color or diameter changes, break it up.
+		var prev=null,points=path.getPoints(this.data.length),p2=[]; //If color or diameter changes, break it up.
 		$.each(this.data,(i,v)=>{
 			if (prev && (prev.Dia!=v.Dia || prev.Color!=v.Color || prev.Style!=v.Style))
 				{ drawSegment(p2,prev.Dia,prev.Color,prev.Style); p2=[]; p2.push(points[i-1]); }
 			p2.push(points[i]); prev=v;
 		});
 		if (p2.length>0) { drawSegment(p2,prev.Dia,prev.Color,prev.Style); p2=[]; }
-	};
-};
+	}
+}
 
 //--------------------
+	var raycaster=new THREE.Raycaster();
 	var renderer=new THREE.WebGLRenderer({antialias:true});
 	renderer.setPixelRatio(window.devicePixelRatio);
 	renderer.setSize(window.innerWidth-20, window.innerHeight-20);
+
 //Finish - got to pass in the dom element to append to.
-	document.body.appendChild(renderer.domElement);
+	var v3d=$("#View3D");
+	v3d.append(renderer.domElement);
 	var scene,camera,controls;
+
+	function onWindowResize() {
+		renderer.setSize(v3d.innerWidth(),v3d.innerHeight());
+	}
+
+	var mouse=new THREE.Vector2();
+	function onMouseMove(event) {
+		event.preventDefault();
+		mouse.x=(event.offsetX/v3d.innerWidth())*2-1;
+		mouse.y=-(event.offsetY/v3d.innerHeight())*2+1;
+	}
 
 	function animate() {
 		requestAnimationFrame(animate);
@@ -77,17 +99,31 @@ var MyTubes=function(data,parameters) {
 		render();
 	}
 
+	var yMax=0;
 	function render() {
+		raycaster.setFromCamera(mouse,camera);
+		var intersects=raycaster.intersectObjects(scene.children);
+		if (intersects.length>0) {
+			$.each(intersects,(i,v)=>{
+				if (v.object.name=="tube")
+				{
+					var s="Mouse intersection<br>"+(0-Math.round(v.point.x))+", "+Math.round(yMax-v.point.y)+", "+Math.round(v.point.z);
+					if ($("#mouse-info").html()!=s) $("#mouse-info").html(s);
+				}
+			});
+		}
+
 		renderer.render(scene, camera);
 	}
 
 	function showIt(data) {
 		var mt=new MyTubes(data,{preferredDivisions:8});
-		var tdv=new ThreeDPlot(mt.xExtent,mt.yExtent,mt.zExtent,mt.divUnits,"270° (East)","180° (South)");
+		var tdv=new ThreeDPlot(mt.xExtent,mt.yExtent,mt.zExtent,mt.divUnits,"270° (West)","180° (South)");
+		yMax=mt.yExtent[1];
 		camera=tdv.getDefaultCamera();
-		controls=tdv.applyOrbitControls(camera);
+		controls=tdv.applyOrbitControls(camera,renderer.domElement);
 		scene=new THREE.Scene();
-		scene.background=new THREE.Color( 0xeffffff );
+		scene.background=new THREE.Color(0xeffffff);
 		tdv.applyDefaultLights(scene);
 		tdv.drawWalls(scene,{color: 0x808080,linewidth: 0.001 });
 		//tdv.drawWalls(scene,{color: 0xe0e0e0,linewidth: 0.002 });
@@ -99,4 +135,18 @@ var MyTubes=function(data,parameters) {
 		animate();
 	};
 
-	d3.tsv('https://syork60.github.io/share/GF_A20_5.tsv').then(showIt).catch(err=>console.log('Error: '+err));
+	function load(scene,name)
+	{
+		ThreeDPlot.dispose(scene);
+//Finish - show a message on error.
+		d3.tsv('https://syork60.github.io/share/'+name+".tsv").
+			then(showIt).catch(err=>console.log(err));
+	}
+
+	function onSampleChange(scene) { load(scene,$("#samples").val()) }
+
+	$("#View3D").mousemove(onMouseMove);
+	window.addEventListener('resize',onWindowResize,false );
+	$("#samples").change(()=>onSampleChange(scene));
+
+	load(scene,"Sample8");
