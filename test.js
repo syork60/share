@@ -1,5 +1,6 @@
 class ThreeDPlotParams
 {
+//Finish - quadrant should be detected automatically.
 	constructor(data,parameters,quadrant)	//UL,UR,LL,LR.
 	{
 		this.setValues=function(values) {
@@ -30,7 +31,7 @@ class ThreeDPlotParams
 		if (quadrant==1) { this.xPlaneName="0° (North)"; this.zPlaneName="270° (West)"; }
 		else if (quadrant==2) { this.xPlaneName="90° (East)"; this.zPlaneName="0° (North)"; }
 		else if (quadrant==3) { this.xPlaneName="270° (West)"; this.zPlaneName="180° (South)"; }
-		else if (quadrant==4) { this.xPlaneName="180° (South)"; this.zPlaneName="90° (East)"; }
+		else if (quadrant==4) { this.zPlaneName="180° (South)"; this.xPlaneName="90° (East)"; }
 		else throw "Invalid quadrant!";
 		var f=this.quadrant==1 || this.quadrant==3;
 		this.xBack=f?this.xExtent[1]:this.xExtent[0]; this.xFront=f?this.xExtent[0]:this.xExtent[1];
@@ -43,15 +44,13 @@ class ThreeDPlot
 {
 	constructor(threeDPlotParams)
 	{
-//Finish - these max values are bad.  Need to use front/back.
-		this.pp=threeDPlotParams; this.maxX=this.pp.xExtent[1]; this.maxY=this.pp.yExtent[1]; this.maxZ=this.pp.zExtent[1];
-		var er=ext=>ext[1]-ext[0];
+		this.pp=threeDPlotParams; this.maxY=this.pp.yExtent[1]; var er=ext=>ext[1]-ext[0];
 		this.scaleFactor=Math.max(Math.max(er(this.pp.xExtent),er(this.pp.yExtent)),er(this.pp.zExtent))/100;
 	}
 
 	drawOne(scene,material,vtx) { var lg=new THREE.LineGeometry(); lg.setPositions(vtx); scene.add(new THREE.Line2(lg,material)); }
-	drawXAndY(scene,material,val) { this.drawOne(scene,material,[val,this.pp.yExtent[1],this.pp.zBack,val,0,this.pp.zBack,val,0,this.pp.zFront]); }
-	drawZAndY(scene,material,val) { this.drawOne(scene,material,[this.pp.xBack,this.pp.yExtent[1],val,this.pp.xBack,0,val,this.pp.xFront,0,val]); }
+	drawXAndY(scene,material,val) { this.drawOne(scene,material,[val,this.maxY,this.pp.zBack,val,0,this.pp.zBack,val,0,this.pp.zFront]); }
+	drawZAndY(scene,material,val) { this.drawOne(scene,material,[this.pp.xBack,this.maxY,val,this.pp.xBack,0,val,this.pp.xFront,0,val]); }
 	drawXAndZ(scene,material,val) { this.drawOne(scene,material,[this.pp.xBack,val,this.pp.zFront,this.pp.xBack,val,this.pp.zBack,this.pp.xFront,val,this.pp.zBack]); }
 
 	drawWalls(scene,lineMaterialOptions) {
@@ -62,7 +61,7 @@ class ThreeDPlot
 		if (this.pp.zBack<this.pp.zFront) for(var i=this.pp.zBack;i<this.pp.zFront;i+=ds) this.drawZAndY(scene,material,i);
 		else for(var i=this.pp.zBack;i>this.pp.zFront;i-=ds) this.drawZAndY(scene,material,i);
 		this.drawZAndY(scene,material,this.pp.zFront);
-		for(var i=ds;i<this.pp.yExtent[1];i+=ds) this.drawXAndZ(scene,material,i); this.drawXAndZ(scene,material,this.pp.yExtent[1]);
+		for(var i=ds;i<this.maxY;i+=ds) this.drawXAndZ(scene,material,i); this.drawXAndZ(scene,material,this.maxY);
 	}
 
 	highlightZeros(scene,lineMaterialOptions)
@@ -72,10 +71,9 @@ class ThreeDPlot
 		scene.add(new THREE.AmbientLight(0xffffff,2.5));
 		var pla=(x,y,z)=>{ var pl=new THREE.PointLight(0xffffff,0.6,0,0); pl.position.set(x,y,z); scene.add(pl); };
 			//8 lights - all 8 corners of the cube.
-		pla(-this.maxX-200,this.maxY,this.maxZ+200); pla(-this.maxX-200,0,this.maxZ+200);
-		pla(-this.pp.xExtent[0],this.maxY,this.maxZ+200); pla(-this.pp.xExtent[0],0,this.maxZ+200);
-		pla(-this.maxX-200,this.maxY,this.pp.zExtent[0]); pla(-this.maxX-200,0,this.pp.zExtent[0]);
-		pla(-this.pp.xExtent[0],this.maxY,this.pp.zExtent[0]); pla(-this.pp.xExtent[0],0,this.pp.zExtent[0]);
+		var minX=this.pp.xExtent[0],minZ=this.pp.zExtent[0],maxX=this.pp.xExtent[1],maxZ=this.pp.zExtent[1];
+		pla(-maxX-200,this.maxY,maxZ+200); pla(-maxX-200,0,maxZ+200); pla(-minX,this.maxY,maxZ+200); pla(-minX,0,maxZ+200);
+		pla(-maxX-200,this.maxY,minZ); pla(-maxX-200,0,minZ); pla(-minX,this.maxY,minZ); pla(-minX,0,minZ);
 
 			//6 lights.
 		//var Y=this.maxY/2; pla(-this.maxX-200,Y,this.maxZ+200); pla(200,Y,this.maxZ+200); pla(-this.maxX-200,Y,-200); pla(200,Y,-200);
@@ -90,7 +88,7 @@ class ThreeDPlot
 			var getTG=s=>new THREE.TextGeometry(s,{ font: font, size: self.scaleFactor*2.8, height: 1, curveSegments: 12, bevelEnabled: false});
 			var getTGWidth=g=>{ g.computeBoundingBox(); return g.boundingBox.max.x; }
 			var geometry=getTG(self.pp.zPlaneName),gWidth=getTGWidth(geometry);
-			geometry.rotateY(-Math.PI/2); geometry.translate(self.pp.xBack,self.maxY+self.scaleFactor/2,(self.maxZ-gWidth)/2);
+			geometry.rotateY(-Math.PI/2); geometry.translate(self.pp.xBack,self.maxY+self.scaleFactor/2,(self.pp.zExtent[1]-gWidth)/2);
 			scene.add(new THREE.Mesh(geometry, matDark));
 			geometry=getTG(self.pp.xPlaneName); gWidth=getTGWidth(geometry);
 //Finish - why do these two only use scaleFactor for the Y axis?      
@@ -110,7 +108,7 @@ class ThreeDPlot
 
 	applyOrbitControls(camera,domElement)
 	{
-		var oc=new THREE.OrbitControls(camera,domElement); oc.target=new THREE.Vector3(-this.maxX/2,this.maxY/2,0);
+		var oc=new THREE.OrbitControls(camera,domElement); oc.target=new THREE.Vector3(-this.pp.xExtent[1]/2,this.maxY/2,0);
 		oc.screenSpacePanning=true; oc.enableDamping=true; oc.dampingFactor=0.08;
 		oc.rotateSpeed=0.1; oc.panSpeed=0.1; return oc;
 	}
@@ -118,7 +116,7 @@ class ThreeDPlot
 	getDefaultCamera()
 	{
 		var rc=new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000000);
-		rc.position.set(-this.maxX*1.4, this.maxY*1.3, this.maxX*2); return rc;
+		rc.position.set(-this.pp.xExtent[1]*1.4, this.maxY*1.3, this.pp.xExtent[1]*2); return rc;
 	}
 
 	static disposeNode(node)
@@ -173,7 +171,6 @@ class MyTubes
 {
 	constructor(threeDPlotParams) { this.pp=threeDPlotParams; }
 
-		//Never got the Line2 working here.
 	drawShadow(scene,path,m4,shadowColor) {	//Currently, this is just the X-wall shadow.
 		var geometry=new THREE.Geometry(); geometry.setFromPoints(path.getPoints(this.pp.data.length)); geometry.applyMatrix(m4);
 		scene.add(new THREE.Line(geometry,new THREE.LineBasicMaterial({ color: shadowColor })));
@@ -261,7 +258,6 @@ class MyTubes
 	function showIt(data) {
 		var pp=new ThreeDPlotParams(data,{preferredDivisions:8},3);
 		var mt=new MyTubes(pp);
-		//var pp=new ThreeDPlotParams(mt.xExtent,mt.yExtent,mt.zExtent,mt.divUnits,3);
 		var tdv=new ThreeDPlot(pp);
 		yMax=pp.yExtent[1];
 		camera=tdv.getDefaultCamera();
