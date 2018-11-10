@@ -1,31 +1,35 @@
-var ThreeDPlot=function(xExtent,yExtent,zExtent,divSize,xPlaneName,zPlaneName) {
-	this.xExtent=xExtent; this.yExtent=yExtent; this.zExtent=zExtent; this.divSize=divSize;
-	this.xPlaneName=xPlaneName; this.zPlaneName=zPlaneName;
-	this.maxX=this.xExtent[1]; this.maxY=this.yExtent[1]; this.maxZ=this.zExtent[1];
+class ThreeDPlot
+{
+	constructor(xExtent,yExtent,zExtent,divSize,xPlaneName,zPlaneName)
+	{
+		this.xExtent=xExtent; this.yExtent=yExtent; this.zExtent=zExtent; this.divSize=divSize;
+		this.xPlaneName=xPlaneName; this.zPlaneName=zPlaneName;
+		this.maxX=this.xExtent[1]; this.maxY=this.yExtent[1]; this.maxZ=this.zExtent[1];
 
-	var er=ext=>ext[1]-ext[0];
-	this.scaleFactor=Math.max(Math.max(er(this.xExtent),er(this.yExtent)),er(this.zExtent))/100;
-	this.makeWall=function(xExtent,yExtent,divSize) {
-		var vtx=[],xVal=xExtent[1],yVal=yExtent[1],yMin=yExtent[0];
-		for(var i=xExtent[0];i<=xVal+1;i+=divSize)
-		{
-			vtx.push(-i, -yMin, 0); vtx.push(-i, -yVal, 0);
-			if (i<xVal+1) { i+=divSize; if (i>xVal) i=xVal; vtx.push(-i, -yVal, 0); vtx.push(-i, -yMin, 0); }
-		};
-		if (i>xVal+1) vtx.push(-xVal,0,0);
-		vtx.push(-xVal, -yVal, 0); vtx.push(0, -yVal, 0);
-		vtx.push(0, 0, 0); vtx.push(-xVal, 0, 0);
-		for(var i=yExtent[0];i<yVal;i+=divSize)
-		{
-			vtx.push(-xVal, -i, 0); vtx.push(-xExtent[0], -i, 0);
-			i+=divSize; if (i>yVal) i=yVal; vtx.push(-xExtent[0], -i, 0); vtx.push(-xVal, -i, 0);  
-		};
-		var lg=new THREE.LineGeometry(); lg.setPositions(vtx);
-		var m4=new THREE.Matrix4(); m4.makeRotationAxis(new THREE.Vector3(1, 0, 0), Math.PI); lg.applyMatrix(m4);  
-		return lg;
+		var er=ext=>ext[1]-ext[0];
+		this.scaleFactor=Math.max(Math.max(er(this.xExtent),er(this.yExtent)),er(this.zExtent))/100;
+		this.makeWall=function(xExtent,yExtent,divSize) {
+			var vtx=[],xVal=xExtent[1],yVal=yExtent[1],yMin=yExtent[0];
+			for(var i=xExtent[0];i<=xVal+1;i+=divSize)
+			{
+				vtx.push(-i, -yMin, 0); vtx.push(-i, -yVal, 0);
+				if (i<xVal+1) { i+=divSize; if (i>xVal) i=xVal; vtx.push(-i, -yVal, 0); vtx.push(-i, -yMin, 0); }
+			};
+			if (i>xVal+1) vtx.push(-xVal,0,0);
+			vtx.push(-xVal, -yVal, 0); vtx.push(0, -yVal, 0);
+			vtx.push(0, 0, 0); vtx.push(-xVal, 0, 0);
+			for(var i=yExtent[0];i<yVal;i+=divSize)
+			{
+				vtx.push(-xVal, -i, 0); vtx.push(-xExtent[0], -i, 0);
+				i+=divSize; if (i>yVal) i=yVal; vtx.push(-xExtent[0], -i, 0); vtx.push(-xVal, -i, 0);  
+			};
+			var lg=new THREE.LineGeometry(); lg.setPositions(vtx);
+			var m4=new THREE.Matrix4(); m4.makeRotationAxis(new THREE.Vector3(1, 0, 0), Math.PI); lg.applyMatrix(m4);  
+			return lg;
+		}
 	}
 
-	this.drawWalls=function(scene,lineMaterialOptions) {
+	drawWalls(scene,lineMaterialOptions) {
 		var material=new THREE.LineMaterial(lineMaterialOptions);
 		var w=this.makeWall(this.xExtent,this.yExtent,this.divSize);
 		var l1=new THREE.Line2(w,material); l1.translateZ(this.zExtent[0]);
@@ -38,14 +42,14 @@ var ThreeDPlot=function(xExtent,yExtent,zExtent,divSize,xPlaneName,zPlaneName) {
 		scene.add(l1); scene.add(l2); scene.add(l3);
 	}
 
-	this.highlightZeros=function(scene,lineMaterialOptions) {
+	highlightZeros(scene,lineMaterialOptions) {
 		var material=new THREE.LineMaterial(lineMaterialOptions);
 		var sa=v=>{ var lg=new THREE.LineGeometry(); lg.setPositions(v); var l=new THREE.Line2(lg,material); scene.add(l); };
 		var vtx=[]; vtx.push(0,this.yExtent[1],this.zExtent[0]); vtx.push(0,0,this.zExtent[0]); vtx.push(0,0,this.zExtent[1]); sa(vtx);
 		vtx=[]; vtx.push(-this.xExtent[0],this.yExtent[1],0); vtx.push(-this.xExtent[0],0,0); vtx.push(-this.xExtent[1],0,0); sa(vtx);
 	}
 
-	this.applyDefaultLights=function(scene) {
+	applyDefaultLights(scene) {
 		scene.add(new THREE.AmbientLight(0xffffff,2.5));
 		var pla=(x,y,z)=>{ var pl=new THREE.PointLight(0xffffff,0.6,0,0); pl.position.set(x,y,z); scene.add(pl); };
 			//8 lights - all 8 corners of the cube.
@@ -59,7 +63,7 @@ var ThreeDPlot=function(xExtent,yExtent,zExtent,divSize,xPlaneName,zPlaneName) {
 		//pla(-this.maxX/2,this.maxY+200,this.maxZ/2); pla(-this.maxX/2,-200,this.maxZ/2);
 	}
 
-	this.drawScales=function(scene,textColor) {
+	drawScales(scene,textColor) {
 		var self=this; var loader=new THREE.FontLoader();
 		var url='https://syork60.github.io/share/gentilis_regular.typeface.json';
 		loader.load(url, function (font) {
@@ -84,20 +88,20 @@ var ThreeDPlot=function(xExtent,yExtent,zExtent,divSize,xPlaneName,zPlaneName) {
 		});
 	}
 
-	this.applyOrbitControls=function(camera,domElement)
+	applyOrbitControls(camera,domElement)
 	{
 		var oc=new THREE.OrbitControls(camera,domElement); oc.target=new THREE.Vector3(-this.maxX/2,this.maxY/2,0);
 		oc.screenSpacePanning=true; oc.enableDamping=true; oc.dampingFactor=0.08;
 		oc.rotateSpeed=0.1; oc.panSpeed=0.1; return oc;
 	}
 
-	this.getDefaultCamera=function()
+	getDefaultCamera()
 	{
 		var rc=new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000000);
 		rc.position.set(-this.maxX*1.4, this.maxY*1.3, this.maxX*2); return rc;
 	}
 
-	function disposeNode (node)
+	static disposeNode(node)
 	{
 		if (node instanceof THREE.Mesh)
 		{
@@ -131,11 +135,11 @@ var ThreeDPlot=function(xExtent,yExtent,zExtent,divSize,xPlaneName,zPlaneName) {
 		node.parent.remove(node);
 	}   // disposeNode
 
-	function intDispose(node,callback)
+	static intDispose(node,callback)
 	{
 		for (var i=node.children.length-1;i>=0;i--)
-			{ var child=node.children[i]; intDispose(child,callback); callback (child); }
+			{ var child=node.children[i]; ThreeDPlot.intDispose(child,callback); callback (child); }
 	}
 
-	this.dispose=function(scene) { if (scene) intDispose(scene,disposeNode); }
-};
+	static dispose(scene) { if (scene) ThreeDPlot.intDispose(scene,ThreeDPlot.disposeNode); }
+}
