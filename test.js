@@ -15,11 +15,11 @@ class ThreeDPlotParams
 		};
 
 		this.data=data; this.preferredDivisions=8; this.setValues(parameters);
-		this.rus100=v=>Math.round(v/100)*100;
-		this.ru100=ext=> { return [this.rus100(ext[0]),0-this.rus100(0-ext[1])]; };
-		this.xExtent=this.ru100(d3.extent(data,d=>+d.East));
+		this.rus100=v=>Math.round((v+99.9)/100)*100;
+		this.ru100=ext=> { var b=Math.min(0,ext[0]),t=this.rus100(ext[1]); if (b==0) return [0,t]; return [0-this.rus100(0-b),t]; };
+		this.xExtent=this.ru100(d3.extent(data,d=>+d.North));
 		this.yExtent=this.ru100(d3.extent(data,d=>+d.TVD));
-		this.zExtent=this.ru100(d3.extent(data,d=>+d.North));
+		this.zExtent=this.ru100(d3.extent(data,d=>+d.East));
 		var er=ext=>ext[1]-ext[0];
 		var lc=Math.max(Math.max(er(this.xExtent),er(this.yExtent)),er(this.zExtent))/this.preferredDivisions;
 		this.divSize=this.rus100(lc); this.quadrant=quadrant;
@@ -29,7 +29,7 @@ class ThreeDPlotParams
 		};
 		this.xExtent=fixExt(this.xExtent); this.yExtent=fixExt(this.yExtent); this.zExtent=fixExt(this.zExtent); this.yExtent[0]=0;
 		if (quadrant==1) { this.xPlaneName="0° (North)"; this.zPlaneName="270° (West)"; }
-		else if (quadrant==2) { this.xPlaneName="90° (East)"; this.zPlaneName="0° (North)"; }
+		else if (quadrant==2) { this.zPlaneName="90° (East)"; this.xPlaneName="0° (North)"; }
 		else if (quadrant==3) { this.xPlaneName="270° (West)"; this.zPlaneName="180° (South)"; }
 		else if (quadrant==4) { this.zPlaneName="180° (South)"; this.xPlaneName="90° (East)"; }
 		else throw "Invalid quadrant!";
@@ -76,8 +76,8 @@ class ThreeDPlot
 		pla(-maxX-200,this.maxY,minZ); pla(-maxX-200,0,minZ); pla(-minX,this.maxY,minZ); pla(-minX,0,minZ);
 
 			//6 lights.
-		//var Y=this.maxY/2; pla(-this.maxX-200,Y,this.maxZ+200); pla(200,Y,this.maxZ+200); pla(-this.maxX-200,Y,-200); pla(200,Y,-200);
-		//pla(-this.maxX/2,this.maxY+200,this.maxZ/2); pla(-this.maxX/2,-200,this.maxZ/2);
+		//var Y=this.maxY/2; pla(-maxX-200,Y,maxZ+200); pla(200,Y,maxZ+200); pla(-maxX-200,Y,-200); pla(200,Y,-200);
+		//pla(-maxX/2,this.maxY+200,maxZ/2); pla(-maxX/2,-200,maxZ/2);
 	}
 
 	drawScales(scene,textColor) {
@@ -88,20 +88,19 @@ class ThreeDPlot
 			var getTG=s=>new THREE.TextGeometry(s,{ font: font, size: self.scaleFactor*2.8, height: 1, curveSegments: 12, bevelEnabled: false});
 			var getTGWidth=g=>{ g.computeBoundingBox(); return g.boundingBox.max.x; }
 			var geometry=getTG(self.pp.zPlaneName),gWidth=getTGWidth(geometry);
-			geometry.rotateY(-Math.PI/2); geometry.translate(self.pp.xBack,self.maxY+self.scaleFactor/2,(self.pp.zExtent[1]-gWidth)/2);
-			scene.add(new THREE.Mesh(geometry, matDark));
+			geometry.rotateY(Math.PI/2); geometry.translate(self.pp.xBack,self.maxY+self.scaleFactor/2,(self.pp.zFront-self.pp.zBack-gWidth)/2);
+			scene.add(new THREE.Mesh(geometry,matDark));
 			geometry=getTG(self.pp.xPlaneName); gWidth=getTGWidth(geometry);
-//Finish - why do these two only use scaleFactor for the Y axis?      
-			var tm=new THREE.Mesh(geometry,matDark); tm.position.x=-((self.pp.xBack-self.pp.xFront-gWidth)/2); tm.position.y=self.maxY+self.scaleFactor/2;
+			var tm=new THREE.Mesh(geometry,matDark); tm.position.x=-((self.pp.xFront-self.pp.xBack-gWidth)/2); tm.position.y=self.maxY+self.scaleFactor/2;
 			tm.position.z=self.pp.zBack; scene.add(tm);
 			var doScale=(v,tf)=> { geometry=getTG(""+v); tf(geometry); scene.add(new THREE.Mesh(geometry, matDark)); };
-			var doX=v=>doScale(v,g=>{ g.rotateY(-Math.PI/2); g.rotateZ(-Math.PI/2); g.translate(-v+4,0,self.pp.zFront+4); });
-			for(var i=self.pp.xBack-self.pp.divSize;i>self.pp.xFront;i-=self.pp.divSize) doX(-i); doX(-self.pp.xFront);
-			var doY1=v=>doScale(v,g=>{ geometry.rotateY(-Math.PI/2); geometry.translate(self.pp.xBack,self.maxY-v,self.pp.zFront+4); });
+			var doX=v=>doScale(v,g=>{ var tw=getTGWidth(g); g.rotateY(Math.PI/2); g.rotateZ(Math.PI/2); g.translate(v+self.scaleFactor/2,0,self.pp.zFront+tw+self.scaleFactor/2); });
+			for(var i=self.pp.xBack+self.pp.divSize;i<self.pp.xFront;i+=self.pp.divSize) doX(i); doX(self.pp.xFront);
+			var doY1=v=>doScale(v,g=>{ var tw=getTGWidth(g); g.rotateY(Math.PI/2); g.translate(self.pp.xBack,self.maxY-v,self.pp.zFront+tw+self.scaleFactor/2); });
 			for(var i=self.maxY;i>0;i-=self.pp.divSize) doY1(i);
-			var doY2=v=>doScale(v,g=>{ geometry.translate(self.pp.xFront-getTGWidth(geometry)-self.scaleFactor/2,self.maxY-v,self.pp.zBack); });
+			var doY2=v=>doScale(v,g=>{ g.translate(self.pp.xFront+self.scaleFactor/2,self.maxY-v,self.pp.zBack); });
 			for(var i=self.maxY;i>0;i-=self.pp.divSize) doY2(i);
-			var doZ=v=>doScale(v,g=>{ geometry.rotateX(-Math.PI/2); geometry.translate(self.pp.xFront-getTGWidth(geometry)-self.scaleFactor/2,0,v); });
+			var doZ=v=>doScale(v,g=>{ var tw=getTGWidth(g); g.rotateX(-Math.PI/2); g.translate(self.pp.xFront+self.scaleFactor/2,0,v); });
 			for(var i=self.pp.zBack+self.pp.divSize;i<self.pp.zFront;i+=self.pp.divSize) doZ(i); doZ(self.pp.zFront);
 		});
 	}
@@ -116,7 +115,7 @@ class ThreeDPlot
 	getDefaultCamera()
 	{
 		var rc=new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000000);
-		rc.position.set(-this.pp.xExtent[1]*1.4, this.maxY*1.3, this.pp.xExtent[1]*2); return rc;
+		rc.position.set(this.pp.xExtent[1]*1.4, this.maxY*1.3, this.pp.xExtent[1]*2); return rc;
 	}
 
 	static disposeNode(node)
@@ -177,11 +176,11 @@ class MyTubes
 	}
 
 	drawTube(scene,scaleFactor,tubeColors,shadowColor) {
-		var cv=[],yMax=this.pp.yExtent[1]; $.each(this.pp.data,(i,v)=>cv.push(new THREE.Vector3(+v.East,yMax-v.TVD,-v.North)));
+		var cv=[],yMax=this.pp.yExtent[1]; $.each(this.pp.data,(i,v)=>cv.push(new THREE.Vector3(+v.North,yMax-v.TVD,+v.East)));
 		var path=new THREE.CatmullRomCurve3(cv); cv=[];
-		this.drawShadow(scene,path,new THREE.Matrix4().set(0,0,0,-this.pp.zBack, 0,1,0,0, 0,0,1,0, 0,0,0,1),shadowColor);
+		this.drawShadow(scene,path,new THREE.Matrix4().set(0,0,0,this.pp.zBack, 0,1,0,0, 0,0,1,0, 0,0,0,1),shadowColor);
 		this.drawShadow(scene,path,new THREE.Matrix4().set(1,0,0,0, 0,0,0,0, 0,0,1,0, 0,0,0,1),shadowColor);
-		this.drawShadow(scene,path,new THREE.Matrix4().set(1,0,0,0, 0,1,0,0, 0,0,0,-this.pp.xBack, 0,0,0,1),shadowColor);
+		this.drawShadow(scene,path,new THREE.Matrix4().set(1,0,0,0, 0,1,0,0, 0,0,0,this.pp.xBack, 0,0,0,1),shadowColor);
 
 		var drawSegment=(points,dia,color,style)=>{
 			if (points.length<2) return;
@@ -246,7 +245,7 @@ class MyTubes
 			$.each(intersects,(i,v)=>{
 				if (v.object.name=="tube")
 				{
-					var s="Mouse intersection<br>"+(0-Math.round(v.point.x))+", "+Math.round(yMax-v.point.y)+", "+Math.round(v.point.z);
+					var s="Mouse intersection<br>"+Math.round(v.point.x)+", "+Math.round(yMax-v.point.y)+", "+Math.round(v.point.z);
 					if ($("#mouse-info").html()!=s) $("#mouse-info").html(s);
 				}
 			});
@@ -256,7 +255,7 @@ class MyTubes
 	}
 
 	function showIt(data) {
-		var pp=new ThreeDPlotParams(data,{preferredDivisions:8},3);
+		var pp=new ThreeDPlotParams(data,{preferredDivisions:8},2);
 		var mt=new MyTubes(pp);
 		var tdv=new ThreeDPlot(pp);
 		yMax=pp.yExtent[1];
@@ -271,7 +270,7 @@ class MyTubes
 		tdv.drawScales(scene,0x4080a0);
 		//var tubeColors=[0,0xce9481,0xd04040,0x81849e];
 		var tubeColors=[0x404040,0x408040,0xd04040,0x408040];
-		mt.drawTube(scene,tdv.scaleFactor,tubeColors,0x6060f0);
+		//mt.drawTube(scene,tdv.scaleFactor,tubeColors,0x6060f0);
 		animate();
 	};
 
@@ -289,4 +288,5 @@ class MyTubes
 	window.addEventListener('resize',onWindowResize,false );
 	$("#samples").change(()=>onSampleChange(scene));
 
-	load(scene,"Sample1");
+	//load(scene,"Sample1");  //This one is - -
+	load(scene,"Sample13");  //This one is + +
