@@ -1,66 +1,98 @@
+class ThreeDPlotParams
+{
+	constructor(data,parameters)	//UL,UR,LL,LR.
+	{
+		this.setValues=function(values) {
+			if (values===undefined) return;
+			for (var key in values) {
+				var newValue=values[key];
+				if (newValue===undefined ) { console.warn("'"+key+"' parameter is undefined." ); continue; }
+				var currentValue=this[key];
+				if (currentValue===undefined) { console.warn("'" + key + "' is not a property of MyTubes." ); continue; }
+				this[key]=newValue;
+			}
+		};
+
+		this.data=data; this.preferredDivisions=8; this.setValues(parameters);
+		this.xExtent=d3.extent(data,d=>+d.North); this.yExtent=d3.extent(data,d=>+d.TVD); this.zExtent=d3.extent(data,d=>+d.East);
+		if (this.xExtent[1]<0) throw "Invalid 'North' data range!"; this.xExtent[0]=Math.min(0,this.xExtent[0]);
+		if (this.zExtent[1]<0) throw "Invalid 'East' data range!"; this.zExtent[0]=Math.min(0,this.zExtent[0]);
+		this.rus100=v=>Math.round((v+99.9)/100)*100;
+		this.ru100=ext=> { var b=Math.min(0,ext[0]),t=this.rus100(ext[1]); if (b==0) return [0,t]; return [0-this.rus100(0-b),t]; };
+		this.xExtent=this.ru100(this.xExtent); this.yExtent=this.ru100(this.yExtent); this.zExtent=this.ru100(this.zExtent);
+		var fx=Math.abs(this.xExtent[0])>this.xExtent[1],fz=Math.abs(this.zExtent[0])>this.zExtent[1];
+		if (fx && fz) this.quadrant=3; else if (fx) this.quadrant=4; else if (fz) this.quadrant=1; else this.quadrant=2;
+		if (fx) { var t=this.xExtent[0]; this.xExtent[0]=this.xExtent[1]; this.xExtent[1]=-t; }
+		if (fz) { var t=this.zExtent[0]; this.zExtent[0]=this.zExtent[1]; this.zExtent[1]=-t; }
+		var er=ext=>ext[1]-ext[0];
+		var lc=Math.max(Math.max(er(this.xExtent),er(this.yExtent)),er(this.zExtent))/this.preferredDivisions;
+		this.divSize=this.rus100(lc);
+		var fixExt=ext=>{
+			if(ext[0]>=0) ext[0]=-100; if (ext[1]<=0) ext[1]=100;
+			while((ext[0]%this.divSize)<0) ext[0]-=100; while((ext[1]%this.divSize)>0) ext[1]+=100; return ext;
+		};
+		this.xExtent=fixExt(this.xExtent); this.yExtent=fixExt(this.yExtent); this.zExtent=fixExt(this.zExtent); this.yExtent[0]=0;
+		if (this.quadrant==1) { this.zPlaneName="0° (North)"; this.xPlaneName="270° (West)"; }
+		else if (this.quadrant==2) { this.zPlaneName="90° (East)"; this.xPlaneName="0° (North)"; }
+		else if (this.quadrant==3) { this.zPlaneName="270° (West)"; this.xPlaneName="180° (South)"; }
+		else if (this.quadrant==4) { this.zPlaneName="180° (South)"; this.xPlaneName="90° (East)"; }
+		else throw "Invalid quadrant!";
+		this.xBack=this.xExtent[0]; this.xFront=this.xExtent[1]; this.zBack=this.zExtent[0]; this.zFront=this.zExtent[1];
+	}
+}
+
 class ThreeDPlot
 {
-	constructor(xExtent,yExtent,zExtent,divSize,xPlaneName,zPlaneName)
+	constructor(threeDPlotParams)
 	{
-		this.xExtent=xExtent; this.yExtent=yExtent; this.zExtent=zExtent; this.divSize=divSize;
-		this.xPlaneName=xPlaneName; this.zPlaneName=zPlaneName;
-		this.maxX=this.xExtent[1]; this.maxY=this.yExtent[1]; this.maxZ=this.zExtent[1];
+		this.pp=threeDPlotParams; this.maxY=this.pp.yExtent[1]; var er=ext=>ext[1]-ext[0]; this.flip=this.pp.quadrant==1 || this.pp.quadrant==4;
+		this.scaleFactor=Math.max(Math.max(er(this.pp.xExtent),er(this.pp.yExtent)),er(this.pp.zExtent))/100;
+	}
 
-		var er=ext=>ext[1]-ext[0];
-		this.scaleFactor=Math.max(Math.max(er(this.xExtent),er(this.yExtent)),er(this.zExtent))/100;
-		this.makeWall=function(xExtent,yExtent,divSize) {
-			var vtx=[],xVal=xExtent[1],yVal=yExtent[1],yMin=yExtent[0];
-			for(var i=xExtent[0];i<=xVal+1;i+=divSize)
-			{
-				vtx.push(-i, -yMin, 0); vtx.push(-i, -yVal, 0);
-				if (i<xVal+1) { i+=divSize; if (i>xVal) i=xVal; vtx.push(-i, -yVal, 0); vtx.push(-i, -yMin, 0); }
-			};
-			if (i>xVal+1) vtx.push(-xVal,0,0);
-			vtx.push(-xVal, -yVal, 0); vtx.push(0, -yVal, 0);
-			vtx.push(0, 0, 0); vtx.push(-xVal, 0, 0);
-			for(var i=yExtent[0];i<yVal;i+=divSize)
-			{
-				vtx.push(-xVal, -i, 0); vtx.push(-xExtent[0], -i, 0);
-				i+=divSize; if (i>yVal) i=yVal; vtx.push(-xExtent[0], -i, 0); vtx.push(-xVal, -i, 0);  
-			};
-			var lg=new THREE.LineGeometry(); lg.setPositions(vtx);
-			var m4=new THREE.Matrix4(); m4.makeRotationAxis(new THREE.Vector3(1, 0, 0), Math.PI); lg.applyMatrix(m4);  
-			return lg;
-		}
+	drawOne(scene,material,vtx) { var lg=new THREE.LineGeometry(); lg.setPositions(vtx); scene.add(new THREE.Line2(lg,material)); }
+	XAndY(scene,material,val)
+	{
+		if (this.flip) this.drawOne(scene,material,[val,this.maxY,this.pp.zBack,val,0,this.pp.zBack,val,0,this.pp.xFront]);
+		else this.drawOne(scene,material,[val,this.maxY,this.pp.zBack,val,0,this.pp.zBack,val,0,this.pp.zFront]);
+	}
+	ZAndY(scene,material,val)
+	{
+		if (this.flip) this.drawOne(scene,material,[this.pp.xBack,this.maxY,val,this.pp.xBack,0,val,this.pp.zFront,0,val]);
+		else this.drawOne(scene,material,[this.pp.xBack,this.maxY,val,this.pp.xBack,0,val,this.pp.xFront,0,val]);
+	}
+	XAndZ(scene,material,val)
+	{
+		if (this.flip) this.drawOne(scene,material,[this.pp.xBack,val,this.pp.xFront,this.pp.xBack,val,this.pp.zBack,this.pp.zFront,val,this.pp.zBack]);
+		else this.drawOne(scene,material,[this.pp.xBack,val,this.pp.zFront,this.pp.xBack,val,this.pp.zBack,this.pp.xFront,val,this.pp.zBack]);
 	}
 
 	drawWalls(scene,lineMaterialOptions) {
-		var material=new THREE.LineMaterial(lineMaterialOptions);
-		var w=this.makeWall(this.xExtent,this.yExtent,this.divSize);
-		var l1=new THREE.Line2(w,material); l1.translateZ(this.zExtent[0]);
-		//l1.computeLineDistances(); l1.scale.set(1, 1, 1);  //Are these necessary?
-		var l2=new THREE.Line2(this.makeWall(this.zExtent,this.yExtent,this.divSize),material);
-		l2.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),Math.PI/2));
-		l2.translateZ(-this.xExtent[0]);
-		var l3=new THREE.Line2(this.makeWall(this.xExtent,this.zExtent,this.divSize),material)
-		l3.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),Math.PI/2));
-		scene.add(l1); scene.add(l2); scene.add(l3);
+		var material=new THREE.LineMaterial(lineMaterialOptions),ds=this.pp.divSize;
+		if (this.flip)
+		{
+			for(var i=this.pp.xBack;i<this.pp.zFront;i+=ds) this.XAndY(scene,material,i); this.XAndY(scene,material,this.pp.zFront);
+			for(var i=this.pp.zBack;i<this.pp.xFront;i+=ds) this.ZAndY(scene,material,i); this.ZAndY(scene,material,this.pp.xFront);
+		}
+		else
+		{
+			for(var i=this.pp.xBack;i<this.pp.xFront;i+=ds) this.XAndY(scene,material,i); this.XAndY(scene,material,this.pp.xFront);
+			for(var i=this.pp.zBack;i<this.pp.zFront;i+=ds) this.ZAndY(scene,material,i); this.ZAndY(scene,material,this.pp.zFront);
+		}
+		for(var i=ds;i<this.maxY;i+=ds) this.XAndZ(scene,material,i); this.XAndZ(scene,material,this.maxY);
 	}
 
-	highlightZeros(scene,lineMaterialOptions) {
-		var material=new THREE.LineMaterial(lineMaterialOptions);
-		var sa=v=>{ var lg=new THREE.LineGeometry(); lg.setPositions(v); var l=new THREE.Line2(lg,material); scene.add(l); };
-		var vtx=[]; vtx.push(0,this.yExtent[1],this.zExtent[0]); vtx.push(0,0,this.zExtent[0]); vtx.push(0,0,this.zExtent[1]); sa(vtx);
-		vtx=[]; vtx.push(-this.xExtent[0],this.yExtent[1],0); vtx.push(-this.xExtent[0],0,0); vtx.push(-this.xExtent[1],0,0); sa(vtx);
-	}
+	highlightZeros(scene,lineMaterialOptions)
+		{ var m=new THREE.LineMaterial(lineMaterialOptions); this.XAndY(scene,m,0); this.ZAndY(scene,m,0); }
 
 	applyDefaultLights(scene) {
 		scene.add(new THREE.AmbientLight(0xffffff,2.5));
-		var pla=(x,y,z)=>{ var pl=new THREE.PointLight(0xffffff,0.6,0,0); pl.position.set(x,y,z); scene.add(pl); };
+		var pla=(x,y,z)=>{ var pl=new THREE.PointLight(0xffffff,0.5,0,0); pl.position.set(x,y,z); scene.add(pl); };
+    var offset=5000;
 			//8 lights - all 8 corners of the cube.
-		pla(-this.maxX-200,this.maxY,this.maxZ+200); pla(-this.maxX-200,0,this.maxZ+200);
-		pla(-this.xExtent[0],this.maxY,this.maxZ+200); pla(-this.xExtent[0],0,this.maxZ+200);
-		pla(-this.maxX-200,this.maxY,this.zExtent[0]); pla(-this.maxX-200,0,this.zExtent[0]);
-		pla(-this.xExtent[0],this.maxY,this.zExtent[0]); pla(-this.xExtent[0],0,this.zExtent[0]);
-
-			//6 lights.
-		//var Y=this.maxY/2; pla(-this.maxX-200,Y,this.maxZ+200); pla(200,Y,this.maxZ+200); pla(-this.maxX-200,Y,-200); pla(200,Y,-200);
-		//pla(-this.maxX/2,this.maxY+200,this.maxZ/2); pla(-this.maxX/2,-200,this.maxZ/2);
+		pla(this.pp.xFront+offset,this.maxY+offset,this.pp.zFront+offset); pla(this.pp.xFront+offset,-offset,this.pp.zFront+offset);
+		pla(this.pp.xBack-offset,this.maxY+offset,this.pp.zFront+offset); pla(this.pp.xBack-offset,-offset,this.pp.zFront+offset);
+		pla(this.pp.xFront+offset,this.maxY+offset,this.pp.zBack-offset); pla(this.pp.xFront+offset,-offset,this.pp.zBack-offset);
+		pla(this.pp.xBack-offset,this.maxY+offset,this.pp.zBack-offset); pla(this.pp.xBack-offset,-offset,this.pp.zBack-offset);
 	}
 
 	drawScales(scene,textColor) {
@@ -70,27 +102,51 @@ class ThreeDPlot
 			var matDark=new THREE.LineBasicMaterial({ color: textColor, side: THREE.DoubleSide });
 			var getTG=s=>new THREE.TextGeometry(s,{ font: font, size: self.scaleFactor*2.8, height: 1, curveSegments: 12, bevelEnabled: false});
 			var getTGWidth=g=>{ g.computeBoundingBox(); return g.boundingBox.max.x; }
-			var geometry=getTG(self.zPlaneName),gWidth=getTGWidth(geometry);
-			geometry.rotateY(-Math.PI/2); geometry.translate(-self.xExtent[0],self.maxY+self.scaleFactor/2,(self.maxZ-gWidth)/2);
-			scene.add(new THREE.Mesh(geometry, matDark));
-			geometry=getTG(self.xPlaneName); gWidth=getTGWidth(geometry);
-			var tm=new THREE.Mesh(geometry,matDark); tm.position.x=-((self.maxX-gWidth)/2); tm.position.y=self.maxY+self.scaleFactor/2;
-			tm.position.z=self.zExtent[0]; scene.add(tm);
 			var doScale=(v,tf)=> { geometry=getTG(""+v); tf(geometry); scene.add(new THREE.Mesh(geometry, matDark)); };
-			var doX=v=>doScale(v,g=>{ g.rotateY(-Math.PI/2); g.rotateZ(-Math.PI/2); g.translate(-v+4,0,self.maxZ+4); });
-			for(var i=0;i<self.maxX;i+=self.divSize) doX(i); doX(self.maxX);
-			var doY1=v=>doScale(v,g=>{ geometry.rotateY(-Math.PI/2); geometry.translate(-self.zExtent[0],self.maxY-v,self.maxZ+4); });
-			for(var i=self.maxY;i>0;i-=self.divSize) doY1(i);
-			var doY2=v=>doScale(v,g=>{ geometry.translate(-self.maxX-getTGWidth(geometry)-self.scaleFactor/2,self.maxY-v,self.zExtent[0]); });
-			for(var i=self.maxY;i>0;i-=self.divSize) doY2(i);
-			var doZ=v=>doScale(v,g=>{ geometry.rotateX(-Math.PI/2); geometry.translate(-self.maxX-getTGWidth(geometry)-self.scaleFactor/2,0,v); });
-			for(var i=0;i<self.maxZ;i+=self.divSize) doZ(i); doZ(self.maxZ);
+			if (self.flip)
+			{
+				var geometry=getTG(self.pp.zPlaneName),tw=getTGWidth(geometry);
+				geometry.rotateY(Math.PI/2); geometry.translate(self.pp.xBack,self.maxY+self.scaleFactor/2,(self.pp.xFront+self.pp.xBack+tw)/2);
+				scene.add(new THREE.Mesh(geometry,matDark));
+
+				geometry=getTG(self.pp.xPlaneName); tw=getTGWidth(geometry);
+				var tm=new THREE.Mesh(geometry,matDark); tm.position.x=(self.pp.zFront+self.pp.zBack-tw)/2; tm.position.y=self.maxY+self.scaleFactor/2;
+				tm.position.z=self.pp.zBack; scene.add(tm);
+
+				var doX=v=>doScale(v,g=>{ var tw=getTGWidth(g); g.rotateY(Math.PI/2); g.rotateZ(Math.PI/2); g.translate(v+self.scaleFactor/2,0,self.pp.xFront+tw+self.scaleFactor/2); });
+				for(var i=self.pp.xBack+self.pp.divSize;i<self.pp.zFront;i+=self.pp.divSize) doX(i); doX(self.pp.zFront);
+				var doY1=v=>doScale(v,g=>{ var tw=getTGWidth(g); g.rotateY(Math.PI/2); g.translate(self.pp.xBack,self.maxY-v,self.pp.xFront+tw+self.scaleFactor/2); });
+				for(var i=self.maxY;i>0;i-=self.pp.divSize) doY1(i);
+				var doY2=v=>doScale(v,g=>{ g.translate(self.pp.zFront+self.scaleFactor/2,self.maxY-v,self.pp.zBack); });
+				for(var i=self.maxY;i>0;i-=self.pp.divSize) doY2(i);
+				var doZ=v=>doScale(v,g=>{ g.rotateX(-Math.PI/2); g.translate(self.pp.zFront+self.scaleFactor/2,0,v); });
+				for(var i=self.pp.zBack+self.pp.divSize;i<self.pp.xFront;i+=self.pp.divSize) doZ(i); doZ(self.pp.xFront);
+			}
+			else
+			{
+				var geometry=getTG(self.pp.zPlaneName),tw=getTGWidth(geometry);
+				geometry.rotateY(Math.PI/2); geometry.translate(self.pp.xBack,self.maxY+self.scaleFactor/2,(self.pp.zFront+self.pp.zBack+tw)/2);
+				scene.add(new THREE.Mesh(geometry,matDark));
+
+				geometry=getTG(self.pp.xPlaneName); tw=getTGWidth(geometry);
+				var tm=new THREE.Mesh(geometry,matDark); tm.position.x=(self.pp.xFront+self.pp.xBack-tw)/2; tm.position.y=self.maxY+self.scaleFactor/2;
+				tm.position.z=self.pp.zBack; scene.add(tm);
+
+				var doX=v=>doScale(v,g=>{ var tw=getTGWidth(g); g.rotateY(Math.PI/2); g.rotateZ(Math.PI/2); g.translate(v+self.scaleFactor/2,0,self.pp.zFront+tw+self.scaleFactor/2); });
+				for(var i=self.pp.xBack+self.pp.divSize;i<self.pp.xFront;i+=self.pp.divSize) doX(i); doX(self.pp.xFront);
+				var doY1=v=>doScale(v,g=>{ var tw=getTGWidth(g); g.rotateY(Math.PI/2); g.translate(self.pp.xBack,self.maxY-v,self.pp.zFront+tw+self.scaleFactor/2); });
+				for(var i=self.maxY;i>0;i-=self.pp.divSize) doY1(i);
+				var doY2=v=>doScale(v,g=>{ g.translate(self.pp.xFront+self.scaleFactor/2,self.maxY-v,self.pp.zBack); });
+				for(var i=self.maxY;i>0;i-=self.pp.divSize) doY2(i);
+				var doZ=v=>doScale(v,g=>{ g.rotateX(-Math.PI/2); g.translate(self.pp.xFront+self.scaleFactor/2,0,v); });
+				for(var i=self.pp.zBack+self.pp.divSize;i<self.pp.zFront;i+=self.pp.divSize) doZ(i); doZ(self.pp.zFront);
+			}
 		});
 	}
 
 	applyOrbitControls(camera,domElement)
 	{
-		var oc=new THREE.OrbitControls(camera,domElement); oc.target=new THREE.Vector3(-this.maxX/2,this.maxY/2,0);
+		var oc=new THREE.OrbitControls(camera,domElement); oc.target=new THREE.Vector3(-this.pp.xExtent[1]/2,this.maxY/2,0);
 		oc.screenSpacePanning=true; oc.enableDamping=true; oc.dampingFactor=0.08;
 		oc.rotateSpeed=0.1; oc.panSpeed=0.1; return oc;
 	}
@@ -98,14 +154,14 @@ class ThreeDPlot
 	getDefaultCamera()
 	{
 		var rc=new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000000);
-		rc.position.set(-this.maxX*1.4, this.maxY*1.3, this.maxX*2); return rc;
+		rc.position.set(this.pp.xExtent[1]*1.4, this.maxY*1.3, this.pp.xExtent[1]*2); return rc;
 	}
 
 	static disposeNode(node)
 	{
 		if (node instanceof THREE.Mesh)
 		{
-			if (node.geometry) node.geometry.dispose (); 
+			if (node.geometry) node.geometry.dispose ();
 			if (node.material)
 			{
 				if (node.material instanceof THREE.MeshFaceMaterial || node.material instanceof THREE.MultiMaterial)
