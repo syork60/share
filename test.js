@@ -1,7 +1,6 @@
 class ThreeDPlotParams
 {
-//Finish - quadrant should be detected automatically.
-	constructor(data,parameters,quadrant)	//UL,UR,LL,LR.
+	constructor(data,parameters)	//UL,UR,LL,LR.
 	{
 		this.setValues=function(values) {
 			if (values===undefined) return;
@@ -15,28 +14,30 @@ class ThreeDPlotParams
 		};
 
 		this.data=data; this.preferredDivisions=8; this.setValues(parameters);
+		this.xExtent=d3.extent(data,d=>+d.North); this.yExtent=d3.extent(data,d=>+d.TVD); this.zExtent=d3.extent(data,d=>+d.East);
+		if (this.xExtent[1]<0) throw "Invalid 'North' data range!"; this.xExtent[0]=Math.min(0,this.xExtent[0]);
+		if (this.zExtent[1]<0) throw "Invalid 'East' data range!"; this.zExtent[0]=Math.min(0,this.zExtent[0]);
 		this.rus100=v=>Math.round((v+99.9)/100)*100;
 		this.ru100=ext=> { var b=Math.min(0,ext[0]),t=this.rus100(ext[1]); if (b==0) return [0,t]; return [0-this.rus100(0-b),t]; };
-		this.xExtent=this.ru100(d3.extent(data,d=>+d.North));
-		this.yExtent=this.ru100(d3.extent(data,d=>+d.TVD));
-		this.zExtent=this.ru100(d3.extent(data,d=>+d.East));
+		this.xExtent=this.ru100(this.xExtent); this.yExtent=this.ru100(this.yExtent); this.zExtent=this.ru100(this.zExtent);
+		var fx=Math.abs(this.xExtent[0])>this.xExtent[1],fz=Math.abs(this.zExtent[0])>this.zExtent[1];
+		if (fx && fz) this.quadrant=3; else if (fx) this.quadrant=4; else if (fz) this.quadrant=1; else this.quadrant=2;
+		if (fx) { var t=this.xExtent[0]; this.xExtent[0]=this.xExtent[1]; this.xExtent[1]=-t; }
+		if (fz) { var t=this.zExtent[0]; this.zExtent[0]=this.zExtent[1]; this.zExtent[1]=-t; }
 		var er=ext=>ext[1]-ext[0];
 		var lc=Math.max(Math.max(er(this.xExtent),er(this.yExtent)),er(this.zExtent))/this.preferredDivisions;
-		this.divSize=this.rus100(lc); this.quadrant=quadrant;
+		this.divSize=this.rus100(lc);
 		var fixExt=ext=>{
 			if(ext[0]>=0) ext[0]=-100; if (ext[1]<=0) ext[1]=100;
 			while((ext[0]%this.divSize)<0) ext[0]-=100; while((ext[1]%this.divSize)>0) ext[1]+=100; return ext;
 		};
 		this.xExtent=fixExt(this.xExtent); this.yExtent=fixExt(this.yExtent); this.zExtent=fixExt(this.zExtent); this.yExtent[0]=0;
-		if (quadrant==1) { this.xPlaneName="0° (North)"; this.zPlaneName="270° (West)"; }
-		else if (quadrant==2) { this.zPlaneName="90° (East)"; this.xPlaneName="0° (North)"; }
-		else if (quadrant==3) { this.xPlaneName="270° (West)"; this.zPlaneName="180° (South)"; }
-		else if (quadrant==4) { this.zPlaneName="180° (South)"; this.xPlaneName="90° (East)"; }
+		if (this.quadrant==1) { this.zPlaneName="0° (North)"; this.xPlaneName="270° (West)"; }
+		else if (this.quadrant==2) { this.zPlaneName="90° (East)"; this.xPlaneName="0° (North)"; }
+		else if (this.quadrant==3) { this.zPlaneName="270° (West)"; this.xPlaneName="180° (South)"; }
+		else if (this.quadrant==4) { this.zPlaneName="180° (South)"; this.xPlaneName="90° (East)"; }
 		else throw "Invalid quadrant!";
-		var f=this.quadrant==1 || this.quadrant==3;
-		this.xBack=f?this.xExtent[1]:this.xExtent[0]; this.xFront=f?this.xExtent[0]:this.xExtent[1];
-		f=this.quadrant==3 || this.quadrant==4;
-		this.zBack=f?0-this.zExtent[1]:this.zExtent[0]; this.zFront=f?0-this.zExtent[0]:this.zExtent[1];
+		this.xBack=this.xExtent[0]; this.xFront=this.xExtent[1]; this.zBack=this.zExtent[0]; this.zFront=this.zExtent[1];
 	}
 }
 
@@ -44,40 +45,54 @@ class ThreeDPlot
 {
 	constructor(threeDPlotParams)
 	{
-		this.pp=threeDPlotParams; this.maxY=this.pp.yExtent[1]; var er=ext=>ext[1]-ext[0];
+		this.pp=threeDPlotParams; this.maxY=this.pp.yExtent[1]; var er=ext=>ext[1]-ext[0]; this.flip=this.pp.quadrant==1 || this.pp.quadrant==4;
 		this.scaleFactor=Math.max(Math.max(er(this.pp.xExtent),er(this.pp.yExtent)),er(this.pp.zExtent))/100;
 	}
 
 	drawOne(scene,material,vtx) { var lg=new THREE.LineGeometry(); lg.setPositions(vtx); scene.add(new THREE.Line2(lg,material)); }
-	drawXAndY(scene,material,val) { this.drawOne(scene,material,[val,this.maxY,this.pp.zBack,val,0,this.pp.zBack,val,0,this.pp.zFront]); }
-	drawZAndY(scene,material,val) { this.drawOne(scene,material,[this.pp.xBack,this.maxY,val,this.pp.xBack,0,val,this.pp.xFront,0,val]); }
-	drawXAndZ(scene,material,val) { this.drawOne(scene,material,[this.pp.xBack,val,this.pp.zFront,this.pp.xBack,val,this.pp.zBack,this.pp.xFront,val,this.pp.zBack]); }
+	XAndY(scene,material,val)
+	{
+		if (this.flip) this.drawOne(scene,material,[val,this.maxY,this.pp.zBack,val,0,this.pp.zBack,val,0,this.pp.xFront]);
+		else this.drawOne(scene,material,[val,this.maxY,this.pp.zBack,val,0,this.pp.zBack,val,0,this.pp.zFront]);
+	}
+	ZAndY(scene,material,val)
+	{
+		if (this.flip) this.drawOne(scene,material,[this.pp.xBack,this.maxY,val,this.pp.xBack,0,val,this.pp.zFront,0,val]);
+		else this.drawOne(scene,material,[this.pp.xBack,this.maxY,val,this.pp.xBack,0,val,this.pp.xFront,0,val]);
+	}
+	XAndZ(scene,material,val)
+	{
+		if (this.flip) this.drawOne(scene,material,[this.pp.xBack,val,this.pp.xFront,this.pp.xBack,val,this.pp.zBack,this.pp.zFront,val,this.pp.zBack]);
+		else this.drawOne(scene,material,[this.pp.xBack,val,this.pp.zFront,this.pp.xBack,val,this.pp.zBack,this.pp.xFront,val,this.pp.zBack]);
+	}
 
 	drawWalls(scene,lineMaterialOptions) {
 		var material=new THREE.LineMaterial(lineMaterialOptions),ds=this.pp.divSize;
-		if (this.pp.xBack>this.pp.xFront) for(var i=this.pp.xBack;i>this.pp.xFront;i-=ds) this.drawXAndY(scene,material,i);
-		else for(var i=this.pp.xBack;i<this.pp.xFront;i+=ds) this.drawXAndY(scene,material,i);
-		this.drawXAndY(scene,material,this.pp.xFront);
-		if (this.pp.zBack<this.pp.zFront) for(var i=this.pp.zBack;i<this.pp.zFront;i+=ds) this.drawZAndY(scene,material,i);
-		else for(var i=this.pp.zBack;i>this.pp.zFront;i-=ds) this.drawZAndY(scene,material,i);
-		this.drawZAndY(scene,material,this.pp.zFront);
-		for(var i=ds;i<this.maxY;i+=ds) this.drawXAndZ(scene,material,i); this.drawXAndZ(scene,material,this.maxY);
+		if (this.flip)
+		{
+			for(var i=this.pp.xBack;i<this.pp.zFront;i+=ds) this.XAndY(scene,material,i); this.XAndY(scene,material,this.pp.zFront);
+			for(var i=this.pp.zBack;i<this.pp.xFront;i+=ds) this.ZAndY(scene,material,i); this.ZAndY(scene,material,this.pp.xFront);
+		}
+		else
+		{
+			for(var i=this.pp.xBack;i<this.pp.xFront;i+=ds) this.XAndY(scene,material,i); this.XAndY(scene,material,this.pp.xFront);
+			for(var i=this.pp.zBack;i<this.pp.zFront;i+=ds) this.ZAndY(scene,material,i); this.ZAndY(scene,material,this.pp.zFront);
+		}
+		for(var i=ds;i<this.maxY;i+=ds) this.XAndZ(scene,material,i); this.XAndZ(scene,material,this.maxY);
 	}
 
 	highlightZeros(scene,lineMaterialOptions)
-		{ var m=new THREE.LineMaterial(lineMaterialOptions); this.drawXAndY(scene,m,0); this.drawZAndY(scene,m,0); }
+		{ var m=new THREE.LineMaterial(lineMaterialOptions); this.XAndY(scene,m,0); this.ZAndY(scene,m,0); }
 
 	applyDefaultLights(scene) {
 		scene.add(new THREE.AmbientLight(0xffffff,2.5));
-		var pla=(x,y,z)=>{ var pl=new THREE.PointLight(0xffffff,0.6,0,0); pl.position.set(x,y,z); scene.add(pl); };
+		var pla=(x,y,z)=>{ var pl=new THREE.PointLight(0xffffff,0.5,0,0); pl.position.set(x,y,z); scene.add(pl); };
+    var offset=5000;
 			//8 lights - all 8 corners of the cube.
-		var minX=this.pp.xExtent[0],minZ=this.pp.zExtent[0],maxX=this.pp.xExtent[1],maxZ=this.pp.zExtent[1];
-		pla(-maxX-200,this.maxY,maxZ+200); pla(-maxX-200,0,maxZ+200); pla(-minX,this.maxY,maxZ+200); pla(-minX,0,maxZ+200);
-		pla(-maxX-200,this.maxY,minZ); pla(-maxX-200,0,minZ); pla(-minX,this.maxY,minZ); pla(-minX,0,minZ);
-
-			//6 lights.
-		//var Y=this.maxY/2; pla(-maxX-200,Y,maxZ+200); pla(200,Y,maxZ+200); pla(-maxX-200,Y,-200); pla(200,Y,-200);
-		//pla(-maxX/2,this.maxY+200,maxZ/2); pla(-maxX/2,-200,maxZ/2);
+		pla(this.pp.xFront+offset,this.maxY+offset,this.pp.zFront+offset); pla(this.pp.xFront+offset,-offset,this.pp.zFront+offset);
+		pla(this.pp.xBack-offset,this.maxY+offset,this.pp.zFront+offset); pla(this.pp.xBack-offset,-offset,this.pp.zFront+offset);
+		pla(this.pp.xFront+offset,this.maxY+offset,this.pp.zBack-offset); pla(this.pp.xFront+offset,-offset,this.pp.zBack-offset);
+		pla(this.pp.xBack-offset,this.maxY+offset,this.pp.zBack-offset); pla(this.pp.xBack-offset,-offset,this.pp.zBack-offset);
 	}
 
 	drawScales(scene,textColor) {
@@ -87,21 +102,45 @@ class ThreeDPlot
 			var matDark=new THREE.LineBasicMaterial({ color: textColor, side: THREE.DoubleSide });
 			var getTG=s=>new THREE.TextGeometry(s,{ font: font, size: self.scaleFactor*2.8, height: 1, curveSegments: 12, bevelEnabled: false});
 			var getTGWidth=g=>{ g.computeBoundingBox(); return g.boundingBox.max.x; }
-			var geometry=getTG(self.pp.zPlaneName),gWidth=getTGWidth(geometry);
-			geometry.rotateY(Math.PI/2); geometry.translate(self.pp.xBack,self.maxY+self.scaleFactor/2,(self.pp.zFront-self.pp.zBack-gWidth)/2);
-			scene.add(new THREE.Mesh(geometry,matDark));
-			geometry=getTG(self.pp.xPlaneName); gWidth=getTGWidth(geometry);
-			var tm=new THREE.Mesh(geometry,matDark); tm.position.x=-((self.pp.xFront-self.pp.xBack-gWidth)/2); tm.position.y=self.maxY+self.scaleFactor/2;
-			tm.position.z=self.pp.zBack; scene.add(tm);
 			var doScale=(v,tf)=> { geometry=getTG(""+v); tf(geometry); scene.add(new THREE.Mesh(geometry, matDark)); };
-			var doX=v=>doScale(v,g=>{ var tw=getTGWidth(g); g.rotateY(Math.PI/2); g.rotateZ(Math.PI/2); g.translate(v+self.scaleFactor/2,0,self.pp.zFront+tw+self.scaleFactor/2); });
-			for(var i=self.pp.xBack+self.pp.divSize;i<self.pp.xFront;i+=self.pp.divSize) doX(i); doX(self.pp.xFront);
-			var doY1=v=>doScale(v,g=>{ var tw=getTGWidth(g); g.rotateY(Math.PI/2); g.translate(self.pp.xBack,self.maxY-v,self.pp.zFront+tw+self.scaleFactor/2); });
-			for(var i=self.maxY;i>0;i-=self.pp.divSize) doY1(i);
-			var doY2=v=>doScale(v,g=>{ g.translate(self.pp.xFront+self.scaleFactor/2,self.maxY-v,self.pp.zBack); });
-			for(var i=self.maxY;i>0;i-=self.pp.divSize) doY2(i);
-			var doZ=v=>doScale(v,g=>{ var tw=getTGWidth(g); g.rotateX(-Math.PI/2); g.translate(self.pp.xFront+self.scaleFactor/2,0,v); });
-			for(var i=self.pp.zBack+self.pp.divSize;i<self.pp.zFront;i+=self.pp.divSize) doZ(i); doZ(self.pp.zFront);
+			if (self.flip)
+			{
+				var geometry=getTG(self.pp.zPlaneName),tw=getTGWidth(geometry);
+				geometry.rotateY(Math.PI/2); geometry.translate(self.pp.xBack,self.maxY+self.scaleFactor/2,(self.pp.xFront+self.pp.xBack+tw)/2);
+				scene.add(new THREE.Mesh(geometry,matDark));
+
+				geometry=getTG(self.pp.xPlaneName); tw=getTGWidth(geometry);
+				var tm=new THREE.Mesh(geometry,matDark); tm.position.x=(self.pp.zFront+self.pp.zBack-tw)/2; tm.position.y=self.maxY+self.scaleFactor/2;
+				tm.position.z=self.pp.zBack; scene.add(tm);
+
+				var doX=v=>doScale(v,g=>{ var tw=getTGWidth(g); g.rotateY(Math.PI/2); g.rotateZ(Math.PI/2); g.translate(v+self.scaleFactor/2,0,self.pp.xFront+tw+self.scaleFactor/2); });
+				for(var i=self.pp.xBack+self.pp.divSize;i<self.pp.zFront;i+=self.pp.divSize) doX(i); doX(self.pp.zFront);
+				var doY1=v=>doScale(v,g=>{ var tw=getTGWidth(g); g.rotateY(Math.PI/2); g.translate(self.pp.xBack,self.maxY-v,self.pp.xFront+tw+self.scaleFactor/2); });
+				for(var i=self.maxY;i>0;i-=self.pp.divSize) doY1(i);
+				var doY2=v=>doScale(v,g=>{ g.translate(self.pp.zFront+self.scaleFactor/2,self.maxY-v,self.pp.zBack); });
+				for(var i=self.maxY;i>0;i-=self.pp.divSize) doY2(i);
+				var doZ=v=>doScale(v,g=>{ g.rotateX(-Math.PI/2); g.translate(self.pp.zFront+self.scaleFactor/2,0,v); });
+				for(var i=self.pp.zBack+self.pp.divSize;i<self.pp.xFront;i+=self.pp.divSize) doZ(i); doZ(self.pp.xFront);
+			}
+			else
+			{
+				var geometry=getTG(self.pp.zPlaneName),tw=getTGWidth(geometry);
+				geometry.rotateY(Math.PI/2); geometry.translate(self.pp.xBack,self.maxY+self.scaleFactor/2,(self.pp.zFront+self.pp.zBack+tw)/2);
+				scene.add(new THREE.Mesh(geometry,matDark));
+
+				geometry=getTG(self.pp.xPlaneName); tw=getTGWidth(geometry);
+				var tm=new THREE.Mesh(geometry,matDark); tm.position.x=(self.pp.xFront+self.pp.xBack-tw)/2; tm.position.y=self.maxY+self.scaleFactor/2;
+				tm.position.z=self.pp.zBack; scene.add(tm);
+
+				var doX=v=>doScale(v,g=>{ var tw=getTGWidth(g); g.rotateY(Math.PI/2); g.rotateZ(Math.PI/2); g.translate(v+self.scaleFactor/2,0,self.pp.zFront+tw+self.scaleFactor/2); });
+				for(var i=self.pp.xBack+self.pp.divSize;i<self.pp.xFront;i+=self.pp.divSize) doX(i); doX(self.pp.xFront);
+				var doY1=v=>doScale(v,g=>{ var tw=getTGWidth(g); g.rotateY(Math.PI/2); g.translate(self.pp.xBack,self.maxY-v,self.pp.zFront+tw+self.scaleFactor/2); });
+				for(var i=self.maxY;i>0;i-=self.pp.divSize) doY1(i);
+				var doY2=v=>doScale(v,g=>{ g.translate(self.pp.xFront+self.scaleFactor/2,self.maxY-v,self.pp.zBack); });
+				for(var i=self.maxY;i>0;i-=self.pp.divSize) doY2(i);
+				var doZ=v=>doScale(v,g=>{ g.rotateX(-Math.PI/2); g.translate(self.pp.xFront+self.scaleFactor/2,0,v); });
+				for(var i=self.pp.zBack+self.pp.divSize;i<self.pp.zFront;i+=self.pp.divSize) doZ(i); doZ(self.pp.zFront);
+			}
 		});
 	}
 
@@ -122,7 +161,7 @@ class ThreeDPlot
 	{
 		if (node instanceof THREE.Mesh)
 		{
-			if (node.geometry) node.geometry.dispose (); 
+			if (node.geometry) node.geometry.dispose ();
 			if (node.material)
 			{
 				if (node.material instanceof THREE.MeshFaceMaterial || node.material instanceof THREE.MultiMaterial)
@@ -161,10 +200,9 @@ class ThreeDPlot
 	static dispose(scene) { if (scene) ThreeDPlot.intDispose(scene,ThreeDPlot.disposeNode); }
 }
 
-//Finish - handle quadrants properly
 //Finish - Check for mem leaks.
 //Finish - first time camera position.
-//Finish - plane name position on short planes. (4).
+//Finish - fix the light sources.
 
 class MyTubes
 {
@@ -176,11 +214,17 @@ class MyTubes
 	}
 
 	drawTube(scene,scaleFactor,tubeColors,shadowColor) {
-		var cv=[],yMax=this.pp.yExtent[1]; $.each(this.pp.data,(i,v)=>cv.push(new THREE.Vector3(+v.North,yMax-v.TVD,+v.East)));
+		var yMax=this.pp.yExtent[1],q=this.pp.quadrant;
+		var getVec=v=>{
+			var d=yMax-v.TVD;
+			if (q==2) return new THREE.Vector3(+v.North,d,+v.East); if (q==3) return new THREE.Vector3(-v.North,d,-v.East);
+			if (q==1) return new THREE.Vector3(-v.East,d,+v.North); return new THREE.Vector3(+v.East,d,-v.North);
+		};
+		var cv=[]; $.each(this.pp.data,(i,v)=>cv.push(getVec(v)));
 		var path=new THREE.CatmullRomCurve3(cv); cv=[];
-		this.drawShadow(scene,path,new THREE.Matrix4().set(0,0,0,this.pp.zBack, 0,1,0,0, 0,0,1,0, 0,0,0,1),shadowColor);
+		this.drawShadow(scene,path,new THREE.Matrix4().set(0,0,0,this.pp.xBack, 0,1,0,0, 0,0,1,0, 0,0,0,1),shadowColor);
 		this.drawShadow(scene,path,new THREE.Matrix4().set(1,0,0,0, 0,0,0,0, 0,0,1,0, 0,0,0,1),shadowColor);
-		this.drawShadow(scene,path,new THREE.Matrix4().set(1,0,0,0, 0,1,0,0, 0,0,0,this.pp.xBack, 0,0,0,1),shadowColor);
+		this.drawShadow(scene,path,new THREE.Matrix4().set(1,0,0,0, 0,1,0,0, 0,0,0,this.pp.zBack, 0,0,0,1),shadowColor);
 
 		var drawSegment=(points,dia,color,style)=>{
 			if (points.length<2) return;
@@ -255,7 +299,7 @@ class MyTubes
 	}
 
 	function showIt(data) {
-		var pp=new ThreeDPlotParams(data,{preferredDivisions:8},2);
+		var pp=new ThreeDPlotParams(data,{preferredDivisions:8});
 		var mt=new MyTubes(pp);
 		var tdv=new ThreeDPlot(pp);
 		yMax=pp.yExtent[1];
@@ -270,7 +314,7 @@ class MyTubes
 		tdv.drawScales(scene,0x4080a0);
 		//var tubeColors=[0,0xce9481,0xd04040,0x81849e];
 		var tubeColors=[0x404040,0x408040,0xd04040,0x408040];
-		//mt.drawTube(scene,tdv.scaleFactor,tubeColors,0x6060f0);
+		mt.drawTube(scene,tdv.scaleFactor,tubeColors,0x6060f0);
 		animate();
 	};
 
@@ -288,5 +332,6 @@ class MyTubes
 	window.addEventListener('resize',onWindowResize,false );
 	$("#samples").change(()=>onSampleChange(scene));
 
-	//load(scene,"Sample1");  //This one is - -
-	load(scene,"Sample13");  //This one is + +
+	load(scene,"Sample1");  //This one is - -
+	//load(scene,"Sample13");  //This one is + +
+
