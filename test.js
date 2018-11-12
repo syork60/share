@@ -1,5 +1,4 @@
 //Finish - Check for mem leaks.
-//Finish - first time camera position.
 
 class MyTubes
 {
@@ -92,7 +91,7 @@ class MyTubes
 			});
 		}
 
-		renderer.render(scene, camera);
+		renderer.render(scene,camera);
 	}
 
 	function showIt(data) {
@@ -100,8 +99,6 @@ class MyTubes
 		var mt=new MyTubes(pp);
 		var tdv=new ThreeDPlot(pp);
 		yMax=pp.yExtent[1];
-		camera=tdv.getDefaultCamera();
-		controls=tdv.applyOrbitControls(camera,renderer.domElement);
 		scene=new THREE.Scene();
 		scene.background=new THREE.Color(0xeffffff);
 		tdv.applyDefaultLights(scene);
@@ -112,6 +109,16 @@ class MyTubes
 		//var tubeColors=[0,0xce9481,0xd04040,0x81849e];
 		var tubeColors=[0x404040,0x408040,0xd04040,0x408040];
 		mt.drawTube(scene,tdv.scaleFactor,tubeColors,0x6060f0);
+
+		camera=tdv.getDefaultCamera();
+		var sf=Math.sqrt(tdv.scaleFactor)*800;
+		camera.position.set(sf,sf,sf);
+		controls=tdv.applyOrbitControls(camera,renderer.domElement);
+		if (pp.quadrant==2 || pp.quadrant==3)
+			controls.target=new THREE.Vector3(pp.xFront/2,yMax/2,pp.zFront/2);
+		else
+			controls.target=new THREE.Vector3(pp.zFront/2,yMax/2,pp.xFront/2);
+
 		animate();
 	};
 
@@ -130,4 +137,3 @@ class MyTubes
 	$("#samples").change(()=>onSampleChange(scene));
 
 	load(scene,"Sample1");  //This one is - -
-	//load(scene,"Sample13");  //This one is + +
