@@ -1,54 +1,4 @@
 //Finish - Check for mem leaks.
-
-class MyTubes
-{
-	constructor(threeDPlotParams) { this.pp=threeDPlotParams; }
-
-	drawShadow(scene,path,m4,shadowColor) {	//Currently, this is just the X-wall shadow.
-		var geometry=new THREE.Geometry(); geometry.setFromPoints(path.getPoints(this.pp.data.length)); geometry.applyMatrix(m4);
-		scene.add(new THREE.Line(geometry,new THREE.LineBasicMaterial({ color: shadowColor })));
-	}
-
-	drawTube(scene,scaleFactor,tubeColors,shadowColor) {
-		var yMax=this.pp.yExtent[1],q=this.pp.quadrant;
-		var getVec=v=>{
-			var d=yMax-v.TVD;
-			if (q==2) return new THREE.Vector3(+v.North,d,+v.East); if (q==3) return new THREE.Vector3(-v.North,d,-v.East);
-			if (q==1) return new THREE.Vector3(-v.East,d,+v.North); return new THREE.Vector3(+v.East,d,-v.North);
-		};
-		var cv=[]; $.each(this.pp.data,(i,v)=>cv.push(getVec(v)));
-		var path=new THREE.CatmullRomCurve3(cv); cv=[];
-		this.drawShadow(scene,path,new THREE.Matrix4().set(0,0,0,this.pp.xBack, 0,1,0,0, 0,0,1,0, 0,0,0,1),shadowColor);
-		this.drawShadow(scene,path,new THREE.Matrix4().set(1,0,0,0, 0,0,0,0, 0,0,1,0, 0,0,0,1),shadowColor);
-		this.drawShadow(scene,path,new THREE.Matrix4().set(1,0,0,0, 0,1,0,0, 0,0,0,this.pp.zBack, 0,0,0,1),shadowColor);
-
-		var drawSegment=(points,dia,color,style)=>{
-			if (points.length<2) return;
-			var curve=new THREE.CurvePath(),pv=null; $.each(points,(i,v)=>{ if (pv) curve.add(new THREE.LineCurve3(pv,v)); pv=v; });
-			var geometry=new THREE.TubeBufferGeometry(curve,points.length,dia*scaleFactor,32,false);
-			var options=(style&1!=0)?{color: tubeColors[+color],roughness:0.5,metalness:0.8,opacity:0.1,transparent:true}:
-				{color: tubeColors[+color],roughness:0.5,metalness:0.8};
-			var material=new THREE.MeshStandardMaterial(options);
-			var mesh=new THREE.Mesh(geometry,material); mesh.name="tube"; scene.add(mesh);
-			var genCap=(p,pl)=>
-			{
-				var cg=new THREE.CircleGeometry(dia*scaleFactor,32);
-				var v=new THREE.Vector3(p.x-pl.x,p.y-pl.y,p.z-pl.z); v.normalize(); cg.lookAt(v);
-				cg.applyMatrix(new THREE.Matrix4().set(1,0,0,p.x, 0,1,0,p.y, 0,0,1,p.z, 0,0,0,1)); return cg;
-			};
-			scene.add(new THREE.Mesh(genCap(points[0],points[1]),material));
-			var pe=points.length-1; scene.add(new THREE.Mesh(genCap(points[pe],points[pe-1]),material));
-		};
-		var prev=null,points=path.getPoints(this.pp.data.length),p2=[]; //If color or diameter changes, break it up.
-		$.each(this.pp.data,(i,v)=>{
-			if (prev && (prev.Dia!=v.Dia || prev.Color!=v.Color || prev.Style!=v.Style))
-				{ drawSegment(p2,prev.Dia,prev.Color,prev.Style); p2=[]; p2.push(points[i-1]); }
-			p2.push(points[i]); prev=v;
-		});
-		if (p2.length>0) { drawSegment(p2,prev.Dia,prev.Color,prev.Style); p2=[]; }
-	}
-}
-
 //--------------------
 	var raycaster=new THREE.Raycaster();
 	var renderer=new THREE.WebGLRenderer({antialias:true});
@@ -111,7 +61,7 @@ class MyTubes
 		mt.drawTube(scene,tdv.scaleFactor,tubeColors,0x6060f0);
 
 		camera=tdv.getDefaultCamera();
-		var sf=Math.sqrt(tdv.scaleFactor)*800;
+		var sf=tdv.scaleFactor*125;
 		camera.position.set(sf,sf,sf);
 		controls=tdv.applyOrbitControls(camera,renderer.domElement);
 		if (pp.quadrant==2 || pp.quadrant==3)
