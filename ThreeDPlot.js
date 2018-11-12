@@ -184,8 +184,8 @@ class ThreeDPlot
 					if (node.material.normalMap)    node.material.normalMap.dispose ();
 					if (node.material.specularMap)  node.material.specularMap.dispose ();
 					if (node.material.envMap)       node.material.envMap.dispose ();
-					node.material.dispose ();   // disposes any programs associated with the material
 				}
+				node.material.dispose ();   // disposes any programs associated with the material
 			}
 		}
 		node.parent.remove(node);
