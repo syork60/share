@@ -1,3 +1,6 @@
+//Finish - can use let instead of var.
+//Finish - can remove the 'self' by using the arrow function
+
 class ThreeDPlotParams
 {
 	constructor(data,parameters)	//UL,UR,LL,LR.
@@ -165,23 +168,23 @@ class ThreeDPlot
 			if (node.material instanceof THREE.MeshFaceMaterial || node.material instanceof THREE.MultiMaterial)
 			{
 				$.each(node.material.materials, function(idx, mtrl) {
-					if (mtrl.map)           mtrl.map.dispose();
-					if (mtrl.lightMap)      mtrl.lightMap.dispose();
-					if (mtrl.bumpMap)       mtrl.bumpMap.dispose();
-					if (mtrl.normalMap)     mtrl.normalMap.dispose();
-					if (mtrl.specularMap)   mtrl.specularMap.dispose();
-					if (mtrl.envMap)        mtrl.envMap.dispose();
+					if (mtrl.map)           { mtrl.map.dispose(); mtrl.map=null; }
+					if (mtrl.lightMap)      { mtrl.lightMap.dispose(); mtrl.lightMap=null; }
+					if (mtrl.bumpMap)       { mtrl.bumpMap.dispose(); mtrl.bumpMap=null; }
+					if (mtrl.normalMap)     { mtrl.normalMap.dispose(); mtrl.normalMap=null; }
+					if (mtrl.specularMap)   { mtrl.specularMap.dispose(); mtrl.specularMap=null; }
+					if (mtrl.envMap)        { mtrl.envMap.dispose(); mtrl.envMap=null; }
 					mtrl.dispose();    // disposes any programs associated with the material
 				});
 			}
 			else
 			{
-				if (node.material.map)          node.material.map.dispose();
-				if (node.material.lightMap)     node.material.lightMap.dispose();
-				if (node.material.bumpMap)      node.material.bumpMap.dispose();
-				if (node.material.normalMap)    node.material.normalMap.dispose();
-				if (node.material.specularMap)  node.material.specularMap.dispose();
-				if (node.material.envMap)       node.material.envMap.dispose();
+				if (node.material.map)          { node.material.map.dispose(); node.material.map=null; }
+				if (node.material.lightMap)     { node.material.lightMap.dispose(); node.material.lightMap=null; }
+				if (node.material.bumpMap)      { node.material.bumpMap.dispose(); node.material.bumpMap=null; }
+				if (node.material.normalMap)    { node.material.normalMap.dispose(); node.material.normalMap=null; }
+				if (node.material.specularMap)  { node.material.specularMap.dispose(); node.material.specularMap=null; }
+				if (node.material.envMap)       { node.material.envMap.dispose(); node.material.envMap=null; }
 			}
 			node.material.dispose();   // disposes any programs associated with the material
 			node.material=null;
